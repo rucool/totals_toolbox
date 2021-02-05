@@ -23,8 +23,11 @@ clear, close all
 init_time = now;
 
 fprintf('CheckTotals.m Start Time: %s\n', datestr(init_time)); 
-addpath(genpath('/home/michaesm/operational_scripts/totals_toolbox/totals'))
+addpath(genpath('/home/codaradm/operational_scripts_test/totals_toolbox/totals'))
 addpath(genpath('/home/codaradm/HFR_Progs-2_1_3beta'))
+
+which maketotalsOI
+which tuvOI
 
 % Name of the MongoDB document containing configs you want to use
 config_name = 'realtime_long_range';
