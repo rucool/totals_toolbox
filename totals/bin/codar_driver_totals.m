@@ -104,7 +104,7 @@ if conf.Totals.UWLS.Process
     clear I;
     
     % Mask totals    
-    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false);
+    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false,0,0);
     fprintf(1, '%d totals masked out. \n',sum(~IL(:)));
     
     % IL = logical index the same size as the original number of grid points
@@ -220,7 +220,7 @@ if conf.Totals.OI.Process
     clear I;
 
     % Mask totals
-    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false);
+    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false,0,0);
     fprintf(1, '%d totals masked out. \n',sum(~IL(:)));
     
     % IL = logical index the same size as the original number of grid points
