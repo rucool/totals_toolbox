@@ -6,18 +6,18 @@ function codar_driver_totals_qc(dtime, conf, F, pattern_field, varargin)
 %
 % This script processes radial files for input into total generation. 
 %
-% First, it converts the conf variable called from CODAR_configuration.m
+% First, it converts the conf variable sourced from total_configs collection in the Mongo database
 % and converts it into a format that is useable by the HFRProgs toolbox.
 % Then, it loads the radials from all available sites. After loading, it
-% cleans the radials of bad data and masks the radials that are lying over
+% cleans the radials of flagged data and masks the radials that are lying over
 % the land. After this process, it calls makeTotalsOI.m to create the total
-% vectors. Once the totals are generated, this script also cleans and masks
-% out any bad data that may have been generated during total creation.
+% vectors. Once the totals are generated, this script also flags any bad data
+% that may have been generated during total creation.
 % 
 % Results are written to the data directory in matlab formats
 %
-% See also CheckTotals, CODAR_configuration, CODAR_driver_totals,
-% makeTotalsOI
+% See also CheckTotals, CODAR_driver_totals, makeTotalsOI
+%  and total_configs collection in the Mongo database
 
 % Convert conf variable into array that HFRProfs can handle
 conf = HFRPdriver_default_conf( conf );
@@ -61,72 +61,15 @@ try conf.Radials.BearLims(ii,:) = []; end
 if conf.QC.Process  % If conf.QC.Process is set to true
     % Remove radials that were flagged with a QC tests
     Rqc = cleanQCedRadials(Rorig, 'all: QC*', 4);
-    
-    % Remove radials that were flagged with a QC tests (header metadata)
-    % Rqch = cleanQCedRadialFiles(Rqc, 'all: qc_qartod_*', 7);
-    Rqch = cleanQCedRadialFiles(Rqc, 'QC09', 4);
-    
-    % Remove radials above MaxRadSpeed threshold
-    fprintf(1, 'Cleaning Radials. \n');
-    Rclean = cleanRadials( Rqch, conf.Radials.MaxRadSpeed );
-else % Else conf.QC.Process is false
-    fprintf(1, 'Cleaning Radials. \n');
-    Rclean = cleanRadials(Rorig, conf.Radials.MaxRadSpeed );
 end
     
 % Remove radials over land
+% In case the QARTOD valid location test, didn't flag all of the radials over land, this
+% mask will ensure those vectors are not used in the total vector calculation
 fprintf('Masking Radials. \n');
-Rmask = maskRadials( Rclean, conf.Radials.MaskDir, 0);
+Rmask = maskRadials( Rqc, conf.Radials.MaskDir, 0);
 
 %-------------------------------------------------
-% Interpolate missing radials
-fprintf(1, 'Interpolating Radials. \n');
-fprintf(1, '--------------------------------------------------------- \n');
-for n = 1:numel(Rmask)
-    % Allow for possibilty of RangeLims and/or BearLims to be not defined.
-    try
-        RL = conf.Radials.RangeLims(n,:);
-    catch
-        RL = [];
-    end
-    try
-        BL = conf.Radials.BearLims(n,:);
-    catch
-        BL = [];
-    end
-        
-    % If there is only one radial, or maybe some other conditons that I'm 
-    % not thinking of, then the interpolation will fail.  Set up a
-    % try/catch block to keep things from failing.
-    try
-        Rinterp(n) = interpRadials(Rmask(n), ...
-                            'RangeLims', RL, ...
-                            'BearLims', BL, ...
-                            'RangeDelta', conf.Radials.RangeBearSlop(n,1),...
-                            'BearDelta', conf.Radials.RangeBearSlop(n,2),...
-                            'MaxRangeGap', conf.Radials.RangeGap,...
-                            'MaxBearGap', conf.Radials.BearGap,...
-                            'CombineMethod', 'average');
-    catch
-        fprintf(1, 'Warning: ## interpRadials failed for Site: %s\n', Rmask(n).SiteName);
-        res=lasterror;
-        fprintf(1, '%s\n',res.message)
-        Rinterp(n) = Rmask(n);
-        Rinterp(n).ProcessingSteps{end+1} = 'Interpolation failed, revert to uninterpolated';
-    end
-    
-    % Check for case of interpolation creating all NaN's.  Use 90 % as the 
-    % threshold.  Replace with uninterpolated radials and warn the user.
-    if (sum(~isnan(Rinterp(n).U)) < sum(~isnan(Rmask(n).U)) * 0.9)
-        fprintf(1, '%s:\n',char(Rinterp(n).FileName));
-        fprintf(1, 'probably not interpolated properly ... using uninterpolated data instead\n')
-        tmp = Rinterp(n).ProcessingSteps;
-        Rinterp(n) = Rmask(n);
-        Rinterp(n).ProcessingSteps = tmp;
-        Rinterp(n).ProcessingSteps{end+1} = 'Revert to uninterpolated';
-    end
-end
-fprintf(1, '--------------------------------------------------------- \n');
 
 % Load the total grid
 [grid, fn, c] = loadDataFileWithChecks(conf.Totals.GridFile);
@@ -137,7 +80,7 @@ end
 %% Make Unweighted Least Squares Totals
 if conf.Totals.UWLS.Process
     fprintf(1, 'Generating UWLS totals. \n');
-    [TUVuwls, RTUV] = makeTotals(Rinterp,...
+    [TUVuwls, RTUV] = makeTotals(Rmask,...
         'Grid', grid,...
         'TimeStamp', dtime,...
         'spatthresh', conf.Totals.UWLS.spatthresh,...
@@ -150,18 +93,18 @@ if conf.Totals.UWLS.Process
     
     
     [TUVclean, I] = cleanTotals(TUV,...
-        conf.Totals.MaxTotSpeed);
+        conf.QC.QC303_MaxTotSpeed);
     fprintf('%d totals removed by cleanTotals\n', sum(I(:)>0))
 
     % cleanTotals sets I=1 where speed is > maxspeed and I=0 for good values
     % so have to adjust to match QARTOD convention
     I(I == 1) = 4;
     I(I == 0) = 1;
-    TUVqc.QC16 = I;
+    TUVqc.QC303 = I;
     clear I;
     
     % Mask totals    
-    [~, IL]=maskTotals(TUV,conf.Totals.MaskFile,false);
+    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false);
     fprintf(1, '%d totals masked out. \n',sum(~IL(:)));
     
     % IL = logical index the same size as the original number of grid points
@@ -171,10 +114,12 @@ if conf.Totals.UWLS.Process
     
     I = ones(size(IL,1),1);
     I(IL == 0) = 4;
-    TUVqc.QC18 = I;  % there is no QARTOD location test but will call this QC18 for now
+    TUVqc.QC305 = I;  % there is no QARTOD location test but will call this QC305 for now
     clear I, IL;
     
-    [~,I] = cleanTotals(TUVclean,conf.Totals.MaxTotSpeed,conf.Totals.cleanTotalsVarargin{:}); 
+    GDOP_test_parameters = {conf.QC.GDOP_UWLS.QC302_GDOP.ErrorTypeStr conf.QC.GDOP_UWLS.QC302_GDOP.ErrorVariableStr conf.QC.GDOP_UWLS.QC302_GDOP.MaxError}';
+
+    [~,I] = cleanTotals(TUVclean,conf.QC.QC303_MaxTotSpeed,GDOP_test_parameters); 
     % I = Index of data points that were removed.  This will have a zero for
     %     good data, a 1 for data whose speed is above maxspd, a 2 for data
     %     violated first error condition, a 4 for data violating second error
@@ -183,12 +128,13 @@ if conf.Totals.UWLS.Process
     % b/c max speed already called index variable will not be a sum since both tests cannot fail
     I(I == 2) = 4;
     I(I == 0) = 1;
-    TUVqc.QC15 = I;
+    TUVqc.QC302 = I;
     clear I;
     
+    TUVqc.qc_operator_flag = ones(length(TUV.U),1).*2;
     
-    TUVqc.PRIM = max([TUVqc.QC15, TUVqc.QC16,TUVqc.QC18 ],[],2);
-    minqc = min([TUVqc.QC15, TUVqc.QC16,TUVqc.QC18 ],[],2);
+    TUVqc.PRIM = max([TUVqc.QC302, TUVqc.QC303,TUVqc.QC305,TUVqc.qc_operator_flag],[],2);
+    minqc = min([TUVqc.QC302, TUVqc.QC303,TUVqc.QC305, TUVqc.qc_operator_flag ],[],2);
     minqc1 = find(minqc == 1);
     prim2 = find(TUVqc.PRIM == 2);
     setto1 = intersect(minqc1, prim2); 
@@ -196,7 +142,23 @@ if conf.Totals.UWLS.Process
       TUVqc.PRIM(setto1) = 1;  % if at least one other test has passed, set the primary flag to pass instead of not evaluated
     end
 
-    TUVqc.qc_operator_mask = ones(length(TUV.U),1).*2;
+   
+    TUV = TUVqc;
+    TUV.MARACOOS_TUV_struct_version = 'undefined';
+
+    TUVmetadata.conf = conf;
+    TUVmetadata.radial_metadata = [];
+    rmstr = '';
+    for rr = 1:size(RTUV,1)
+      tmp = char(RTUV(rr).FileName);
+      rmstr = [rmstr, '"' ,tmp(max(strfind(tmp,'/'))+1:end),'\n",'];
+    end
+    TUVmetadata.radial_metadata = rmstr(1:end-1);
+    TUVmetadata.radial_num_sites = size(RTUV,1);
+    TUVmetadata.missingRadials = missingRadials;
+    TUVmetadata.attributes = [];
+    TUVmetadata.header = ['QCPrimaryFlagDefinition: Highest flag value of these test flags: QC303, QC305, QC302, operator (Note: Primary flag will be set to 2 only if ALL tests were not evaluated)'];
+
 
     % Save results
     [tdn, tfn] = datenum_to_directory_filename([conf.Totals.UWLS.BaseDir lower(pattern_field)],...
@@ -206,23 +168,31 @@ if conf.Totals.UWLS.Process
         conf.MonthFlag);
 
     tdn = tdn{1};
-
+    filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_uwls_maracoos.mat'];
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
 
-    save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUVuwls','TUV','TUVqc');
+    %save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUV');
+    save(fullfile(tdn, filename),'RTUV','TUV','TUVmetadata');
 end
 fprintf(1, '--------------------------------------------------------- \n');
 
 if conf.Totals.OI.Process
     % Create OI Totals
-    % Start with Rmask (pre interpolation)
     RTUV = Rmask;
 
+    if strcmp(conf.Totals.OI.weighting_function, 'exponential')
+      wf = 2;
+    elseif strcmp(conf.Totals.OI.weighting_function, 'gaussian')
+      wf = 1;
+    else
+      warning('Incorrect setting for choice of OI weighting function.  It should be set to exponential or gaussian.') 
+    end
+      
     % Call makeTotalsOI to generate the totals.
     fprintf(1, 'Generating OI totals. \n');
-    [TUVorig, RTUV]=makeTotalsOI(RTUV,...
+    [TUVorig, RTUV]=makeTotalsOI_2021_01_22(RTUV,...
         'Grid', grid,...
         'TimeStamp', dtime,...
         'mdlvar', conf.Totals.OI.mdlvar,...
@@ -230,6 +200,7 @@ if conf.Totals.OI.Process
         'sx', conf.Totals.OI.sx,...
         'sy', conf.Totals.OI.sy,...
         'tempthresh',conf.Totals.OI.tempthresh, ...
+        'weighting', wf, ...
         'DomainName',conf.Totals.DomainName, ...
         'CreationInfo',conf.Totals.CreationInfo);
     
@@ -237,7 +208,7 @@ if conf.Totals.OI.Process
     TUVqc = TUVorig;
     
     % Clean totals
-    [TUVclean, I] = cleanTotals(TUV, conf.Totals.MaxTotSpeed); %, ...
+    [TUVclean, I] = cleanTotals(TUV, conf.QC.QC303_MaxTotSpeed); %, ...
 
     fprintf(1, '%d totals removed by cleanTotals. \n',sum(I(:)>0));
 
@@ -245,11 +216,11 @@ if conf.Totals.OI.Process
     % so have to adjust to match QARTOD convention
     I(I == 1) = 4;
     I(I == 0) = 1;
-    TUVqc.QC16 = I;
+    TUVqc.QC303 = I;
     clear I;
 
     % Mask totals
-    [~, IL]=maskTotals(TUV,conf.Totals.MaskFile,false);
+    [~, IL]=maskTotals(TUV,conf.QC.QC305_MaskFile,false);
     fprintf(1, '%d totals masked out. \n',sum(~IL(:)));
     
     % IL = logical index the same size as the original number of grid points
@@ -259,10 +230,13 @@ if conf.Totals.OI.Process
     
     I = ones(size(IL,1),1);
     I(IL == 0) = 4;
-    TUVqc.QC18 = I;  % there is no QARTOD location test but will call this QC18 for now
+    TUVqc.QC305 = I;  % there is no QARTOD location test but will call this QC305 for now
     clear I, IL;
     
-    [~,I] = cleanTotals(TUVclean,conf.Totals.MaxTotSpeed,conf.Totals.OI.cleanTotalsVarargin{1});  
+    Uerr_test_parameters = {conf.QC.GDOP_OI.QC306_OI_Uerr.ErrorTypeStr conf.QC.GDOP_OI.QC306_OI_Uerr.ErrorVariableStr conf.QC.GDOP_OI.QC306_OI_Uerr.MaxError}';
+    Verr_test_parameters = {conf.QC.GDOP_OI.QC307_OI_Verr.ErrorTypeStr conf.QC.GDOP_OI.QC307_OI_Verr.ErrorVariableStr conf.QC.GDOP_OI.QC307_OI_Verr.MaxError}';
+
+    [~,I] = cleanTotals(TUVclean,conf.Totals.MaxTotSpeed,Uerr_test_parameters);  
     % I = Index of data points that were removed.  This will have a zero for
     %     good data, a 1 for data whose speed is above maxspd, a 2 for data
     %     violated first error condition, a 4 for data violating second error
@@ -271,18 +245,20 @@ if conf.Totals.OI.Process
     % b/c max speed already called index variable will not be a sum since both tests cannot fail
     I(I == 2) = 4;
     I(I == 0) = 1;
-    TUVqc.QC19 = I;  % there is no QARTOD OI Uerr uncertainty test but will call this QC19 for now
+    TUVqc.QC306 = I;  % there is no QARTOD OI Uerr uncertainty test but will call this QC306 for now
     clear I;
     
-    [~,I] = cleanTotals(TUVclean,conf.Totals.MaxTotSpeed,conf.Totals.OI.cleanTotalsVarargin{2});  
+    [~,I] = cleanTotals(TUVclean,conf.Totals.MaxTotSpeed,Verr_test_parameters);  
     % b/c max speed already called index variable will not be a sum since both tests cannot fail
     I(I == 2) = 4;
     I(I == 0) = 1;
-    TUVqc.QC20 = I; % there is no QARTOD OI Uerr uncertainty test but will call this QC20 for now
+    TUVqc.QC307 = I; % there is no QARTOD OI Uerr uncertainty test but will call this QC307 for now
     clear I;
     
-    TUVqc.PRIM = max([TUVqc.QC16,TUVqc.QC18,TUVqc.QC19,TUVqc.QC20 ],[],2);
-    minqc = min([TUVqc.QC16,TUVqc.QC18,TUVqc.QC19,TUVqc.QC20 ],[],2);
+    TUVqc.qc_operator_flag = ones(length(TUV.U),1).*2;
+    
+    TUVqc.PRIM = max([TUVqc.QC303,TUVqc.QC305,TUVqc.QC306,TUVqc.QC307,TUVqc.qc_operator_flag ],[],2);
+    minqc = min([TUVqc.QC303,TUVqc.QC305,TUVqc.QC306,TUVqc.QC307,TUVqc.qc_operator_flag ],[],2);
     minqc1 = find(minqc == 1);
     prim2 = find(TUVqc.PRIM == 2);
     setto1 = intersect(minqc1, prim2); 
@@ -290,38 +266,22 @@ if conf.Totals.OI.Process
       TUVqc.PRIM(setto1) = 1;  % if at least one other test has passed, set the primary flag to pass instead of not evaluated
     end
   
-    TUVqc.qc_operator_mask = ones(length(TUV.U),1).*2;
+    TUV = TUVqc;
+    TUV.MARACOOS_TUV_struct_version = 'undefined';
     
-    % %% ----------------------------------------------------------------------
-    % %% This section of code was a contribution from Erick Fredj to gap fill the data
-    % % Masking is a destructive process, any totals current inside the mask will be
-    % % set to zero.
-    % 
-    % fprintf(1, 'Starting Smooth Total Field. \n');
-    % fprintf(1, '--------------------------------------------------------- \n');
-    % 
-    % mask=load(conf.OSN.BestCoverageFile);
-    % hfrcvrg = inpolygon(TUV.LonLat(:,1),TUV.LonLat(:,2),mask(:,1),mask(:,2));
-    % 
-    % % Robust Smooth
-    % TUVosn = TUV;
-    % TUVosn.CreationInfo= 'Erick Fredj';
-    % 
-    % U=TUVosn.U(hfrcvrg);
-    % V=TUVosn.V(hfrcvrg);
-    % 
-    % % set to reset TUVs.U to NaN
-    % TUVosn.U = NaN(size(TUVosn.U));
-    % % set to reset TUVs.V to NaN
-    % TUVosn.V = NaN(size(TUVosn.V));
-    % 
-    % %% this function smoothn is located in toolbox_eric_fredj
-    % Vs = smoothn({U,V},'robust');
-    % 
-    % TUVosn.U(hfrcvrg)=Vs{1};
-    % TUVosn.V(hfrcvrg)=Vs{2};
-
-    %%-------------------------------------------------------------------------
+    TUVmetadata.conf = conf;
+    TUVmetadata.radial_metadata = [];
+    rmstr = '';
+    for rr = 1:size(RTUV,1)
+      tmp = char(RTUV(rr).FileName);
+      rmstr = [rmstr, '"' ,tmp(max(strfind(tmp,'/'))+1:end),'\n",'];
+    end
+    TUVmetadata.radial_metadata = rmstr(1:end-1);
+    TUVmetadata.radial_num_sites = size(RTUV,1);
+    TUVmetadata.missingRadials = missingRadials;
+    TUVmetadata.attributes = [];
+    TUVmetadata.header = ['QCPrimaryFlagDefinition: Highest flag value of these test flags: ',conf.QC.OITotalPrimaryFlag_QC_Tests ,' (Note: Primary flag will be set to 2 only if ALL tests were not evaluated)'];
+    
 
     % Save results
     [tdn, tfn] = datenum_to_directory_filename([conf.Totals.OI.BaseDir lower(pattern_field)],...
@@ -331,11 +291,14 @@ if conf.Totals.OI.Process
         conf.Totals.MonthFlag);
     
     tdn = tdn{1};
+    filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_oi_maracoos.mat'];
 
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
 
-    save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUVorig','TUV','TUVqc');
+    %save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUV');
+    save(fullfile(tdn, filename),'TUV','RTUV', 'TUVmetadata' );
+
 end
 fprintf(1, '--------------------------------------------------------- \n');

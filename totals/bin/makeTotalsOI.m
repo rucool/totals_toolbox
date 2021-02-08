@@ -16,6 +16,7 @@ p.MinNumRads = 3;
 p.DomainName = '';
 p.CreationInfo = '';
 p.verbosity = 24;
+p.weighting = 2;  
 
 p.normr = 2; % normalized radius  %new for OI
 %The search radius is a function of the decorrelation scale.  You could theoretically %throw every possible radial data point into the calculation of each grid point, but %this would be incredibly inefficient, as most points greater than a few decorrelation %lengths away have Infinitesimally small weights.  We currently use a factor of 2, %such that a radial measurement must be within
@@ -23,10 +24,10 @@ p.normr = 2; % normalized radius  %new for OI
 %where sx an sy are the X and Y decorrelation scales and x and y are the distances %from the model grid point.  If you do the math backwards and assume sx=sy, you get my %estimate of 37km above.
 
 % Mandatory parameters
-mand_params = { 'Grid', 'TimeStamp', 'mdlvar', 'errvar', 'sx', 'sy', 'tempthresh' };
+mand_params = { 'Grid', 'TimeStamp', 'mdlvar', 'errvar', 'sx', 'sy', 'tempthresh', 'weighting' };
 
 % known parameters
-param_list = { 'Grid', 'TimeStamp', 'mdlvar', 'errvar', 'sx', 'sy', 'normr', 'tempthresh',  'MinNumSites', 'MinNumRads', 'DomainName', 'CreationInfo', 'verbosity' };
+param_list = { 'Grid', 'TimeStamp', 'mdlvar', 'errvar', 'sx', 'sy', 'normr', 'tempthresh', 'weighting', 'MinNumSites', 'MinNumRads', 'DomainName', 'CreationInfo', 'verbosity' };
 
 [p,pb] = checkParamValInputArgs( p, param_list, mand_params, varargin{:} );
 
@@ -189,6 +190,8 @@ for i = 1:length(p.TimeStamp)
     
     TOI.OtherMatrixVars.([mfilename '_TotalsSiteCode'])(k,i) = sc;
     TOI.OtherMatrixVars.([mfilename '_TotalsNumRads'])(k,i) = size(rad_speed,1);
+    TOI.OtherMatrixVars.([mfilename '_TotalsSiteCodeDescription']) = ...
+    'A sum of radial site codes for sites that contributed data to the total vector calculation.  Refer to codes in the radial structures.';
     
     % Continue if number of sites or rads is too small.
     if ns < p.MinNumSites, continue, end
@@ -196,7 +199,7 @@ for i = 1:length(p.TimeStamp)
     
     % All looks good - generate total
     [u,v,xi] = tuvOI(rad_speed,rad_angle, rad_lonlat, TOI.LonLat(k,:), ...
-              p.mdlvar, p.errvar, p.sx, p.sy, 2); 
+              p.mdlvar, p.errvar, p.sx, p.sy, p.weighting); 
     TOI.U(k,i) = u;
     TOI.V(k,i) = v;    
     TOI.ErrorEstimates.Uerr(k,i) = xi(1,1);
