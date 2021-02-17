@@ -168,7 +168,9 @@ if conf.Totals.UWLS.Process
         conf.MonthFlag);
 
     tdn = tdn{1};
-    filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_uwls_maracoos.mat'];
+    %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_uwls_maracoos.mat'];
+    filename = ['hfr_rtv_midatl_6km_uwls_maracoos',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
+  
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
@@ -291,14 +293,20 @@ if conf.Totals.OI.Process
         conf.Totals.MonthFlag);
     
     tdn = tdn{1};
-    filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_oi_maracoos.mat'];
-
+    %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_oi_maracoos.mat'];
+    filename = ['hfr_rtv_midatl_6km_oi_maracoos',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
+    
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
 
     %save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUV');
     save(fullfile(tdn, filename),'TUV','RTUV', 'TUVmetadata' );
+    
+    %write NetCDF
+    eval(['!/home/codaradm/operational_scripts/hfradarpy_scripts/bash/realtime_qc_totals_to_netcdf.sh ', fullfile(tdn, filename), ' ', conf.Totals.OI.BaseDir,'nc/ ' ])
 
 end
 fprintf(1, '--------------------------------------------------------- \n');
+
+
