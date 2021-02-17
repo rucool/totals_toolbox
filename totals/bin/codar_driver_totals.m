@@ -169,7 +169,7 @@ if conf.Totals.UWLS.Process
 
     tdn = tdn{1};
     %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_uwls_maracoos.mat'];
-    filename = ['hfr_rtv_midatl_6km_uwls_maracoos',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
+    filename = ['hfr_rtv_midatl_6km_uwls_maracoos_',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
   
     if ~exist(tdn, 'dir')
       mkdir(tdn);
@@ -294,7 +294,7 @@ if conf.Totals.OI.Process
     
     tdn = tdn{1};
     %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_oi_maracoos.mat'];
-    filename = ['hfr_rtv_midatl_6km_oi_maracoos',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
+    filename = ['hfr_rtv_midatl_6km_oi_maracoos_',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
     
     if ~exist(tdn, 'dir')
       mkdir(tdn);
