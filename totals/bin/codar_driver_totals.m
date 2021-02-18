@@ -1,4 +1,4 @@
-function codar_driver_totals_qc(dtime, conf, F, pattern_field, varargin)
+function codar_driver_totals(dtime, conf, F, pattern_field, varargin)
 %
 % Rutgers HFRadar Processing Toolbox
 %
@@ -28,6 +28,12 @@ mand_params = {'Radials.Sites', 'Radials.Types', 'Radials.RangeLims',...
             
 % Check if mandatory input arguments are satisfied
 conf = checkParamValInputArgs( conf, {}, mand_params, varargin{:} );
+
+% do not make a folder called BestChoice, pattern_field will only be used to create a folder 
+% if the choice is to compute totals with all ideal or all measured
+if strcmp(pattern_field,'BestChoice')
+   pattern_field = '';  
+end
 
 % Load Radial Data
 fprintf(1, 'Loading Radial Data. \n');
@@ -161,22 +167,22 @@ if conf.Totals.UWLS.Process
 
 
     % Save results
-    [tdn, tfn] = datenum_to_directory_filename([conf.Totals.UWLS.BaseDir lower(pattern_field)],...
+    [tdn, tfn] = datenum_to_directory_filename([conf.Totals.UWLS.BaseDir,...
+        'mat/', conf.SystemType,'/', lower(pattern_field)],...
         dtime,...
         conf.Totals.UWLS.FilePrefix,...
         conf.Totals.UWLS.FileSuffix,...
         conf.MonthFlag);
 
     tdn = tdn{1};
-    %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_uwls_maracoos.mat'];
-    filename = ['hfr_rtv_midatl_6km_uwls_maracoos_',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
-  
+ 
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
 
-    %save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUV');
-    save(fullfile(tdn, filename),'RTUV','TUV','TUVmetadata');
+    save(fullfile(tdn, tfn{1}),'RTUV','TUV','TUVmetadata');
+    clear tdn tfn
+    
 end
 fprintf(1, '--------------------------------------------------------- \n');
 
@@ -286,25 +292,36 @@ if conf.Totals.OI.Process
     
 
     % Save results
-    [tdn, tfn] = datenum_to_directory_filename([conf.Totals.OI.BaseDir lower(pattern_field)],...
+    [tdn, tfn] = datenum_to_directory_filename([conf.Totals.OI.BaseDir,...
+        'mat/', conf.SystemType,'/', lower(pattern_field)],...
         dtime,...
         conf.Totals.OI.FilePrefix,...
         conf.Totals.FileSuffix,...
         conf.Totals.MonthFlag);
     
     tdn = tdn{1};
-    %filename = [datestr(TUV.TimeStamp, 'yyyymmddHHMM'), '_hfr_midatl_6km_rtv_oi_maracoos.mat'];
-    filename = ['hfr_rtv_midatl_6km_oi_maracoos_',datestr(TUV.TimeStamp, 'yyyy_mm_dd_HHMM'),'.mat'];
-    
+   
     if ~exist(tdn, 'dir')
       mkdir(tdn);
     end
 
-    %save(fullfile(tdn, tfn{1}),'conf','missingRadials','RTUV','TUV');
-    save(fullfile(tdn, filename),'TUV','RTUV', 'TUVmetadata' );
+    save(fullfile(tdn, tfn{1}),'TUV','RTUV', 'TUVmetadata' );
     
-    %write NetCDF
-    eval(['!/home/codaradm/operational_scripts/hfradarpy_scripts/bash/realtime_qc_totals_to_netcdf.sh ', fullfile(tdn, filename), ' ', conf.Totals.OI.BaseDir,'nc/ ' ])
+    
+     [tdn_nc, ~] = datenum_to_directory_filename([conf.Totals.OI.BaseDir,...
+        'nc/', conf.SystemType,'/realtime', lower(pattern_field)],...
+        dtime,...
+        conf.Totals.OI.FilePrefix,...
+        '.nc',...
+        0);
+    tdn_nc = tdn_nc{1};
+    if ~exist(tdn_nc, 'dir')
+        mkdir(tdn_nc);
+    end
+ 
+   eval(['!/home/codaradm/operational_scripts/hfradarpy_scripts/bash/realtime_qc_totals_to_netcdf.sh ', fullfile(tdn, tfn{1}), ' ', tdn_nc ])
+
+
 
 end
 fprintf(1, '--------------------------------------------------------- \n');
