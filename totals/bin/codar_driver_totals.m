@@ -154,12 +154,11 @@ if conf.Totals.UWLS.Process
 
     TUVmetadata.conf = conf;
     TUVmetadata.radial_metadata = [];
-    rmstr = '';
     for rr = 1:size(RTUV,1)
+      clear tmp;
       tmp = char(RTUV(rr).FileName);
-      rmstr = [rmstr, '"' ,tmp(max(strfind(tmp,'/'))+1:end),'\n",'];
+      TUVmetadata.radial_metadata{rr} = tmp(max(strfind(tmp,'/'))+1:end);
     end
-    TUVmetadata.radial_metadata = rmstr(1:end-1);
     TUVmetadata.radial_num_sites = size(RTUV,1);
     TUVmetadata.missingRadials = missingRadials;
     TUVmetadata.attributes = [];
@@ -279,12 +278,11 @@ if conf.Totals.OI.Process
     
     TUVmetadata.conf = conf;
     TUVmetadata.radial_metadata = [];
-    rmstr = '';
     for rr = 1:size(RTUV,1)
+      clear tmp;
       tmp = char(RTUV(rr).FileName);
-      rmstr = [rmstr, '"' ,tmp(max(strfind(tmp,'/'))+1:end),'\n",'];
+      TUVmetadata.radial_metadata{rr} = tmp(max(strfind(tmp,'/'))+1:end);
     end
-    TUVmetadata.radial_metadata = rmstr(1:end-1);
     TUVmetadata.radial_num_sites = size(RTUV,1);
     TUVmetadata.missingRadials = missingRadials;
     TUVmetadata.attributes = [];
